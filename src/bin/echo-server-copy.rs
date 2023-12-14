@@ -1,5 +1,8 @@
 use tokio::{
-  io::{self, AsyncReadExt, AsyncWriteExt},
+  io::{
+    self,
+    // AsyncReadExt, AsyncWriteExt
+  },
   net::TcpListener,
 };
 
@@ -19,22 +22,27 @@ async fn main() -> io::Result<()> {
     dbg!(&socket, &addr);
 
     tokio::spawn(async move {
-      let mut buf = vec![0; 1024];
-      loop {
-        match socket.read(&mut buf).await {
-          Ok(0) => break,
-          Ok(n) => {
-            println!("{}", &String::from_utf8_lossy(&buf[..n]));
-            if socket.write_all(&buf[..n]).await.is_err() {
-              return;
-            }
-          }
-          Err(e) => {
-            dbg!("ERROR: {:?}", e);
-            return;
-          }
-        }
+      let (mut rd, mut wr) = socket.split();
+      if io::copy(&mut rd, &mut wr).await.is_err() {
+        eprintln!("failed to copy")
       }
+
+      // let mut buf = vec![0; 1024];
+      // loop {
+      //   match socket.read(&mut buf).await {
+      //     Ok(0) => break,
+      //     Ok(n) => {
+      //       println!("{}", &String::from_utf8_lossy(&buf[..n]));
+      //       if socket.write_all(&buf[..n]).await.is_err() {
+      //         return;
+      //       }
+      //     }
+      //     Err(e) => {
+      //       dbg!("ERROR: {:?}", e);
+      //       return;
+      //     }
+      //   }
+      // }
     });
   }
 
