@@ -4,13 +4,21 @@ use std::{
 };
 
 use bytes::Bytes;
-use mini_redis::{
-  Command::{self, Get, Set},
-  Connection, Frame,
-};
+use mini_redis::Command;
 use tokio::net::{TcpListener, TcpStream};
 
+use tokio_mini_redis::connection::Connection;
+
 type DB = Arc<Mutex<HashMap<String, Bytes>>>;
+
+#[derive(Debug)]
+pub enum Frame {
+  Simple(String),
+  Integer(u64),
+  Bulk(Bytes),
+  Null,
+  Array(Vec<Frame>),
+}
 
 const PORT: u32 = 6379;
 const LOCALHOST: &str = "127.0.0.1";
@@ -65,3 +73,14 @@ async fn process(sockt: TcpStream, db: DB) -> () {
     connection.write_frame(&response).await.unwrap();
   }
 }
+
+// pub enum Command {
+//   Get(String),
+//   Set(String),
+// }
+
+// impl Command {
+//   fn from_frame(self) -> Option<Frame> {
+//     Some(Frame::Null)
+//   }
+// }
