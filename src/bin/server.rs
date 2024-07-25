@@ -43,7 +43,7 @@ async fn process(socket: TcpStream, db: Db) {
             Get(cmd) => {
                 let db = db.lock().unwrap();
                 if let Some(val) = db.get(cmd.key()) {
-                    Frame::Bulk(val.clone().into())
+                    Frame::Bulk(val.clone())
                 } else {
                     Frame::Null
                 }
