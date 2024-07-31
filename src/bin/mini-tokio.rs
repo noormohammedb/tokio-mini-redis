@@ -1,11 +1,12 @@
 // #[allow(dead_code, unused_variables)]
 
 use std::sync::{mpsc, Arc, Mutex};
-use std::task::{Context, Poll};
+use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 
 use std::{cell::RefCell, future::Future, pin::Pin, thread};
 
+use futures::future::poll_fn;
 use futures::task::{self, ArcWake};
 
 const TIMEOUT: u64 = 5;
@@ -14,12 +15,14 @@ const TIMEOUT: u64 = 5;
 struct Delay {
     when: Instant,
     count: RefCell<u32>,
+    waker: Option<Arc<Mutex<Waker>>>,
 }
 impl Delay {
     fn new(delay: Duration) -> Delay {
         Delay {
             when: Instant::now() + delay,
             count: RefCell::new(0),
+            waker: None,
         }
     }
 }
@@ -27,16 +30,26 @@ impl Delay {
 impl Future for Delay {
     type Output = &'static str;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut current = self.count.borrow_mut();
-        *current += 1;
-        println!("{current}: poll");
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // let mut current = self.count.borrow_mut();
+        // *current += 1;
+        // println!("{current}: poll");
         if self.when <= Instant::now() {
             println!("===================Done===================");
-            Poll::Ready("Done")
+            return Poll::Ready("Done");
+        }
+
+        if let Some(waker) = &self.waker {
+            let mut waker = waker.lock().unwrap();
+
+            if !waker.will_wake(cx.waker()) {
+                *waker = cx.waker().clone();
+            }
+            Poll::Pending
         } else {
-            let waker = cx.waker().clone();
             let when = self.when;
+            let waker = Arc::new(Mutex::new(cx.waker().clone()));
+            self.waker = Some(waker.clone());
 
             thread::spawn(move || {
                 let now = Instant::now();
@@ -45,7 +58,8 @@ impl Future for Delay {
                     thread::sleep(when - now);
                 }
                 println!("waked");
-                waker.wake();
+                let waker = waker.lock().unwrap();
+                waker.wake_by_ref();
             });
             println!("pending");
             Poll::Pending
@@ -165,3 +179,24 @@ fn main() {
 
     mini_tokio.run();
 }
+/*
+
+#[tokio::main]
+async fn main() {
+    let mut delay = Some(Delay::new(Duration::from_millis(1000)));
+
+    poll_fn(move |cx| {
+        let mut delay = delay.take().unwrap();
+        let res = Pin::new(&mut delay).poll(cx);
+        assert!(res.is_pending());
+        let foo = tokio::spawn(async move {
+            delay.await;
+        });
+
+        // Poll::Ready(())
+        Poll::<()>::Pending
+    })
+    .await;
+}
+
+ */
