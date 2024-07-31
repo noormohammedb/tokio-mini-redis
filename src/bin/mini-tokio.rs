@@ -6,8 +6,8 @@ use std::time::{Duration, Instant};
 
 use std::{cell::RefCell, future::Future, pin::Pin, thread};
 
-use futures::future::poll_fn;
 use futures::task::{self, ArcWake};
+use tokio::sync::Notify;
 
 const TIMEOUT: u64 = 5;
 
@@ -65,6 +65,23 @@ impl Future for Delay {
             Poll::Pending
         }
     }
+}
+
+async fn delay(dur: Duration) {
+    let when = Instant::now() + dur;
+    let notify = Arc::new(Notify::new());
+    let notify_clone = notify.clone();
+
+    thread::spawn(move || {
+        let now = Instant::now();
+
+        if now < when {
+            thread::sleep(when - now);
+        }
+        notify_clone.notify_one();
+    });
+
+    notify.notified().await;
 }
 
 struct TaskFuture {
@@ -151,7 +168,6 @@ impl MiniTokio {
     }
 }
 
-// #[tokio::main]
 fn main() {
     println!("mini-tokio");
     let future = Delay::new(Duration::from_millis(2000));
@@ -180,7 +196,6 @@ fn main() {
     mini_tokio.run();
 }
 /*
-
 #[tokio::main]
 async fn main() {
     let mut delay = Some(Delay::new(Duration::from_millis(1000)));
@@ -198,5 +213,13 @@ async fn main() {
     })
     .await;
 }
+*/
 
- */
+/*
+#[tokio::main]
+async fn main() {
+    println!("before delay");
+    delay(Duration::from_millis(2000)).await;
+    println!("after delay");
+}
+*/
